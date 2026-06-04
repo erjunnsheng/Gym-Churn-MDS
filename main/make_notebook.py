@@ -41,6 +41,12 @@ md(r"""# 健身房會員流失預測與客戶分群分析
 
 
 code(r"""import os
+# 確保 cwd = 專案根目錄（notebook 可能位於 analysis/ 子資料夾被開啟）
+for _ in range(3):
+    if os.path.exists("data/gym_churn_us.csv"):
+        break
+    os.chdir("..")
+
 import warnings
 warnings.filterwarnings("ignore")
 
@@ -1094,7 +1100,7 @@ notebook = {
     "nbformat_minor": 5,
 }
 
-out = "analysis.ipynb"
+out = "analysis/analysis.ipynb"
 with open(out, "w", encoding="utf-8") as f:
     json.dump(notebook, f, ensure_ascii=False, indent=1)
 
