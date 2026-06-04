@@ -35,6 +35,5 @@ xgb_churn_model.pkl
 session_*.json
 data/cluster_profile.csv
 
-# 報告與簡報源檔（要上傳的話 git add -f 即可）
+# 簡報源檔不推（太大、迭代頻繁；要推的話 git add -f）
 MDS_期末報告.pptx
-analysis.ipynb
