@@ -135,14 +135,14 @@ DEFAULT_PROFILE = {
 
 CHOCOZAP_PROFILE = {
     "gender": 1,             # 預設男（你可改）
-    "Near_Location": 1,      # 簽台北店
+    "Near_Location": 0,      # 簽台北店
     "Partner": 0,            # 沒員工方案
     "Promo_friends": 0,      # 不是朋友推薦
     "Phone": 1,
     "Contract_period": 1,    # 月月制
     "Group_visits": 0,       # chocoZAP 沒傳統團體課
     "Age": 22,
-    "Avg_additional_charges_total": 30.0,
+    "Avg_additional_charges_total": 0.0,
     "months_into_current": 0.0,   # 4 月底剛簽，合約還沒過任何月
     "Lifetime": 1,                # 4 月底入會
     "Avg_class_frequency_total": 0.5,    # 4 週 2 次 = 0.5/週
