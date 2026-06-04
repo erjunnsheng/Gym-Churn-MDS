@@ -1,0 +1,5 @@
+cluster_nogp,gender,Near_Location,Partner,Promo_friends,Phone,Contract_period,Group_visits,Age,Avg_additional_charges_total,months_into_current,Lifetime,Avg_class_frequency_total,Avg_class_frequency_current_month,Churn,n,name
+0,0.502,1.0,0.308,0.162,0.904,2.442,0.336,28.191,129.815,0.063,2.379,1.197,0.959,0.513,1336,試水族
+2,0.497,0.0,0.487,0.076,0.912,2.844,0.224,28.628,137.088,0.126,2.91,1.705,1.528,0.416,589,熄火族
+3,0.507,0.99,0.936,0.806,0.9,8.774,0.559,29.842,157.346,0.99,4.548,1.956,1.935,0.063,1072,活躍短期
+1,0.532,0.981,0.245,0.108,0.901,4.369,0.468,30.131,164.429,0.214,5.116,2.808,2.805,0.062,1003,核心 VIP

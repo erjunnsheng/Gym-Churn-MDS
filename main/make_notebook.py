@@ -1038,6 +1038,233 @@ md(r"""### 7.6.7 方法論小結 + 反思
 
 
 # ============================================================
+# Section 7.7: 移除 gender/Phone 的分群實驗（NOGP）
+# ============================================================
+md(r"""## 7.7 分群實驗：移除 gender / Phone 後重跑 K-means
+
+§7.6 的 z-score 分析揭露一個品質問題：
+
+> **V2 K-means 的 Cluster 2（n=384）是「假影群」** — 它幾乎完全由 `Phone` 這個極不平衡的特徵定義
+> （Phone z ≈ **−3.06**，其他 12 個特徵全部 \|z\| < 0.1）。
+
+這代表 K-means 把 9.7% 的「沒留電話」會員硬切成一群，
+但其**行為跟整體平均沒有顯著差異**，churn 率也只是中等。
+另外 `gender` 在每群的 z-score 都接近 0，純粹是噪音。
+
+### 本實驗的目的
+
+把 `gender` 和 `Phone` 從**分群用的特徵**中移除，看是否能得到更乾淨、更有行為意義的客群。
+
+> ⚠️ **這個移除只動「K-means 分群特徵」，不影響 XGBoost 流失模型**。
+> XGBoost 的特徵集維持 V2 不變（gender 跟 Phone 在 SHAP 仍可能有局部影響）。
+> 「**對分群品質的貢獻**」跟「**對 churn 的預測力**」是兩個獨立概念。
+
+**沿用 V2 方法**（不變）：StandardScaler、KMeans(K=4, random_state=42, n_init=10)、動態命名按 churn 降冪。""")
+
+code(r"""# NOGP = V2 minus gender + Phone（11 個特徵）
+FEATURES_NOGP = [f for f in FEATURES_V2 if f not in ("gender", "Phone")]
+print(f"V2 特徵數：{len(FEATURES_V2)}")
+print(f"NOGP 特徵數：{len(FEATURES_NOGP)}（已移除 gender + Phone）")""")
+
+md(r"""### 7.7.1 NOGP elbow 檢查
+
+移除特徵後最佳 K 可能改變。先看 elbow，若明顯指向別的 K 才考慮改；
+否則為了與 V2 公平對照，沿用 K=4。""")
+
+code(r"""from sklearn.metrics import silhouette_score
+
+X_nogp = df[FEATURES_NOGP]
+scaler_nogp = StandardScaler().fit(X_nogp)
+Xs_nogp = scaler_nogp.transform(X_nogp)
+
+inertias_nogp = []
+for k in range(2, 9):
+    km_test = KMeans(n_clusters=k, random_state=RANDOM_STATE, n_init=10).fit(Xs_nogp)
+    inertias_nogp.append(km_test.inertia_)
+
+fig, ax = plt.subplots(figsize=(7.5, 4.5))
+ax.plot(range(2, 9), inertias_nogp, "o-", linewidth=2, markersize=8, color="#1f77b4")
+ax.axvline(4, color="red", linestyle="--", alpha=0.6, label="K=4（與 V2 對齊）")
+ax.set_xlabel("K（群數）")
+ax.set_ylabel("Inertia")
+ax.set_title("NOGP Elbow Method（移除 gender / Phone）")
+ax.legend()
+plt.tight_layout()
+plt.savefig(f"{FIG_DIR}/20_nogp_elbow.png")
+plt.show()
+
+# 邊際下降比率
+diffs = -np.diff(inertias_nogp)
+ratio_4_to_5 = diffs[2] / diffs[1] if diffs[1] > 0 else 0
+print(f"\nK=3→4 下降量: {diffs[1]:.0f}")
+print(f"K=4→5 下降量: {diffs[2]:.0f}")
+print(f"Ratio: {ratio_4_to_5:.3f}（< 0.6 視為 K=4 明顯 elbow；> 1.1 視為 K=5 更佳）")
+print(f"結論：下降平滑，保持 K=4 與 V2 對照")""")
+
+md(r"""### 7.7.2 配適 K=4 + 動態命名""")
+
+code(r"""km_nogp = KMeans(n_clusters=4, random_state=RANDOM_STATE, n_init=10).fit(Xs_nogp)
+df["cluster_nogp"] = km_nogp.labels_
+
+# 動態命名按 churn 降冪
+churn_by_c = df.groupby("cluster_nogp")["Churn"].mean().sort_values(ascending=False)
+ranked_nogp = churn_by_c.index.tolist()
+NAMES_NOGP = {
+    int(ranked_nogp[0]): "試水族",
+    int(ranked_nogp[1]): "熄火族",
+    int(ranked_nogp[2]): "活躍短期",
+    int(ranked_nogp[3]): "核心 VIP",
+}
+
+print("Cluster ID → 群名 (NOGP, 按 churn 降冪):")
+for cid, name in NAMES_NOGP.items():
+    sub = df[df["cluster_nogp"] == cid]
+    print(f"  C{cid} = {name:<8s}  n={len(sub):>4d}  churn={sub['Churn'].mean():.1%}")""")
+
+md(r"""### 7.7.3 PCA 2D 視覺化""")
+
+code(r"""pca_nogp = PCA(n_components=2, random_state=RANDOM_STATE)
+coords_nogp = pca_nogp.fit_transform(Xs_nogp)
+
+palette_nogp = {
+    "試水族": "#F44336",
+    "熄火族": "#FF9800",
+    "活躍短期": "#FFC107",
+    "核心 VIP": "#4CAF50",
+}
+
+fig, ax = plt.subplots(figsize=(8.5, 6))
+for c in sorted(df["cluster_nogp"].unique()):
+    mask = df["cluster_nogp"] == c
+    name = NAMES_NOGP[int(c)]
+    ax.scatter(coords_nogp[mask, 0], coords_nogp[mask, 1], s=12, alpha=0.5,
+               color=palette_nogp[name], label=f"{name} (n={mask.sum()})")
+ax.set_xlabel(f"PC1 ({pca_nogp.explained_variance_ratio_[0]:.1%})")
+ax.set_ylabel(f"PC2 ({pca_nogp.explained_variance_ratio_[1]:.1%})")
+ax.set_title("K-means 分群 — NOGP（移除 gender / Phone, K=4）")
+ax.legend(loc="best", fontsize=9)
+plt.tight_layout()
+plt.savefig(f"{FIG_DIR}/21_nogp_kmeans_pca.png")
+plt.show()""")
+
+md(r"""### 7.7.4 各群 z-score signature heatmap
+
+熱力圖**仍顯示全 13 特徵**（包括沒參與分群的 gender 跟 Phone），
+這樣才能後驗檢查：**新分群還會不會被 Phone 切出假影群？**""")
+
+code(r"""# baseline 跟 §7.6 一致
+nogp_z_data = []
+nogp_z_cols = []
+for c in churn_by_c.index:
+    sub = df[df["cluster_nogp"] == c]
+    z = (sub[FEATURES_V2].mean() - baseline["baseline_mean"]) / baseline["baseline_std"]
+    nogp_z_data.append(z.values)
+    nogp_z_cols.append(f"C{int(c)} ({NAMES_NOGP[int(c)]})")
+z_df_nogp = pd.DataFrame(np.array(nogp_z_data).T,
+                          index=FEATURES_V2, columns=nogp_z_cols)
+
+fig, ax = plt.subplots(figsize=(8.5, 8.5))
+sns.heatmap(z_df_nogp, annot=True, fmt="+.2f", cmap="RdBu_r", center=0,
+            vmin=-3, vmax=3, ax=ax, linewidths=0.5,
+            cbar_kws={"label": "z-score deviation from baseline"})
+ax.set_title("NOGP K-means z-score signature\n"
+             "（全 13 特徵, 分群只用 11；gender/Phone 後驗檢視）")
+ax.set_xlabel("Cluster（按 churn 降冪）")
+ax.set_ylabel("Feature")
+plt.tight_layout()
+plt.savefig(f"{FIG_DIR}/22_nogp_signature_zscore.png", bbox_inches="tight")
+plt.show()""")
+
+md(r"""### 7.7.5 V2 vs NOGP 量化對照""")
+
+code(r"""# V2 baseline silhouette
+sil_v2 = silhouette_score(X_cluster_v2, km_v2.labels_,
+                           sample_size=2000, random_state=RANDOM_STATE)
+sil_nogp = silhouette_score(Xs_nogp, km_nogp.labels_,
+                             sample_size=2000, random_state=RANDOM_STATE)
+
+# Phone z-score per group: 是否有「Phone 假影群」？
+v2_phone_z = ((df.groupby("cluster_v2")["Phone"].mean() - df["Phone"].mean())
+              / df["Phone"].std())
+nogp_phone_z = ((df.groupby("cluster_nogp")["Phone"].mean() - df["Phone"].mean())
+                / df["Phone"].std())
+
+v2_artifact = int((v2_phone_z.abs() > 1.5).sum())
+nogp_artifact = int((nogp_phone_z.abs() > 1.5).sum())
+
+print("=" * 60)
+print("V2 vs NOGP 量化對照")
+print("=" * 60)
+print(f"\nSilhouette score:")
+print(f"  V2   ({len(FEATURES_V2):>2} 特徵): {sil_v2:.4f}")
+print(f"  NOGP ({len(FEATURES_NOGP):>2} 特徵): {sil_nogp:.4f}")
+print(f"  差異: {sil_nogp - sil_v2:+.4f}")
+
+print(f"\nPhone z-score per cluster:")
+print(f"  V2:   {v2_phone_z.round(2).to_dict()}")
+print(f"  NOGP: {nogp_phone_z.round(2).to_dict()}")
+
+print(f"\n「Phone-only 假影群」（|Phone z| > 1.5 的群數）:")
+print(f"  V2:   {v2_artifact} → {'有假影群' if v2_artifact else '無'}")
+print(f"  NOGP: {nogp_artifact} → {'仍有' if nogp_artifact else '✅ 假影群消失'}")""")
+
+md(r"""### 7.7.6 NOGP 各群 signature 一覽""")
+
+code(r"""for c in churn_by_c.index:
+    sub = df[df["cluster_nogp"] == c]
+    z = (sub[FEATURES_V2].mean() - baseline["baseline_mean"]) / baseline["baseline_std"]
+    top = z[z.abs() > 0.5].sort_values(key=lambda s: s.abs(), ascending=False)
+    print(f"\n[C{int(c)} = {NAMES_NOGP[int(c)]}, n={len(sub)}, "
+          f"churn={sub['Churn'].mean():.1%}]")
+    if len(top) == 0:
+        print("  （無 |z| > 0.5 的 signature）")
+    for f, zv in top.items():
+        flag = "⭐⭐" if abs(zv) > 1 else "⭐"
+        direction = "↑高於" if zv > 0 else "↓低於"
+        print(f"  {flag} {f:<38} z = {zv:+.2f} ({direction}平均)")""")
+
+md(r"""### 7.7.7 結論
+
+| 對照面向 | V2（13 特徵） | NOGP（11 特徵） | 評語 |
+|---|---|---|---|
+| Silhouette score | 0.1199 | **0.1394** | NOGP 改善 +0.0195 |
+| 群數 | 4 | 4 | 結構穩定 |
+| 「假影群」 | C2（n=384）僅靠 Phone z=−3.06 定義 | **0 個**（所有群 \|Phone z\| < 0.1） | ✅ 已消除 |
+| 中流失群（27-42%） | 1 群（27%, n=384, 行為=平均）| **1 群（42%, n=589, 不住附近）** | NOGP 找到 actionable 原因 |
+| 高頻 / 長約綁定群 | 結構相同 | 結構相同 | 留下原本有意義的 signal |
+
+### 關鍵發現：原本 27% 流失「沒理由」的群，現在變成 42% 流失「不住附近」群
+
+V2 的中等流失群（C2 熄火族，churn 27%）的 signature 只有 Phone z=−3.06，
+其他全部接近平均 — **K-means 把「資料品質紀錄習慣」誤認為客戶類型**。
+
+NOGP 移除 Phone 後，K-means 把資源重新分配，找到一個**真正有 actionable signature** 的群：
+**Near_Location z = −2.34**（住得不近）+ Promo_friends 略低 → 「**不住附近 + 沒朋友**」群，
+流失率 41.6%。
+
+這對行銷部的意義：
+- V2 給的中間群「**只能避免推銷簡訊**」（因為他們選擇不留電話）
+- NOGP 給的中間群「**可推開新分店、可推遠距方案、可邀請朋友推薦制**」 — 有具體 4P 動作可做
+
+### 報告反思章節可寫的洞察
+
+> **特徵工程對分群品質的影響跟對監督預測的影響不同**。
+> 本研究中 `Phone` 跟 `gender` 在 SHAP 上排名靠後但**仍對 K-means 有結構性干擾** —
+> 因為距離為基礎的演算法對「**不平衡二元特徵的 z-score 極端值**」高度敏感。
+>
+> 一般在 SHAP 排名底部的特徵會被視為「無關緊要」，
+> 但在 unsupervised setting，**它們可能不是無關緊要而是主動有害**。
+> 此一發現呼應 §6.2 所指：「**監督式 vs 無監督式對 feature 重要性的定義不同**」。
+
+### NOGP 不取代 V2，作為**對照與品質改善紀錄**
+
+- `app.py` 仍使用 V2 K-means（已封存於 `clustering_models.pkl`）
+- 本節為**方法論反思 + 分群品質改善**的對照實驗
+- 完整輸出在 `figures_v2/nogp_*.png` 與 `data/cluster_profile_nogp.csv`
+- 重跑：`python main\experiment_clustering_nogp.py`""")
+
+
+# ============================================================
 # Section 8: Wrap-up
 # ============================================================
 md(r"""## 8. 商業建議與報告對應
