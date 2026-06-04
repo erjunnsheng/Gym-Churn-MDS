@@ -1,0 +1,5 @@
+cluster_v2,Age,Lifetime,Contract_period,months_into_current,Avg_class_frequency_current_month,Group_visits,Churn,size
+3,28.11,2.27,2.36,0.07,0.96,0.29,0.54,1488
+2,29.29,3.91,4.74,0.28,1.71,0.42,0.27,384
+1,29.73,4.51,8.32,0.95,1.9,0.55,0.08,1063
+0,30.11,4.91,4.27,0.2,2.78,0.44,0.06,1065

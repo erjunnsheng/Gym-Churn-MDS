@@ -1,0 +1,40 @@
+# Python venv
+.venv/
+venv/
+env/
+
+# Python caches
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+.ipynb_checkpoints/
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# Streamlit cache
+.streamlit/cache/
+
+# 個資（如果有的話，目前沒）
+*.env
+secrets.toml
+
+# V1 模型保留在本機作為對照，不必上 GitHub / Streamlit Cloud
+xgb_churn_model.pkl
+
+# Streamlit Cloud 不需要的開發紀錄
+session_*.json
+data/cluster_profile.csv
+
+# 報告與簡報源檔（要上傳的話 git add -f 即可）
+MDS_期末報告.pptx
+analysis.ipynb

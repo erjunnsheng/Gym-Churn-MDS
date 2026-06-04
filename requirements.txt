@@ -1,0 +1,11 @@
+# Streamlit Cloud deploy 用的精簡套件清單
+# 完整 dev 套件清單在 requirements_dev.txt
+#
+# 版本鎖：跟本機 venv 對齊，避免 pickle 反序列化失敗
+# （特別是 scikit-learn 跟 xgboost 的 model 物件）
+
+streamlit>=1.30
+pandas>=2.0,<4.0
+numpy>=1.24,<3.0
+scikit-learn==1.8.0
+xgboost==3.2.0
